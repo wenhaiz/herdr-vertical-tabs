@@ -23,6 +23,7 @@ export default class SpaceTree extends View {
     this.selected = null; // the tab the list last scrolled to
     this.lastActive = null;
     this.hoveredMachine = null;
+    this.hoveredTab = null;
     this.machines = []; // hc machine ls: name, state, ...
     this.refreshMachines(cx);
     cx.timer.every(15000, (cx) => this.refreshMachines(cx));
@@ -82,7 +83,7 @@ export default class SpaceTree extends View {
 
   indicator(status, t) {
     return status === "working"
-      ? svg("mods/workspace-chrome/spinner.svg").size(11).flex_none().text_color(t.working).spin(900)
+      ? svg("mods/vertical-tabs/hourglass.svg").size(11).flex_none().text_color(t.working).loop("opacity", { from: 0.35, to: 0.8, period: 1200 })
       : div().size(6).rounded(3).flex_none().bg(t[status]);
   }
 
@@ -157,7 +158,7 @@ export default class SpaceTree extends View {
 
   spaceRow(space, t, narrow) {
     const open = this.open.has(space.id);
-    // An expanded space leaves the working spinner to its tab rows; collapsed,
+    // An expanded space leaves the working mark to its tab rows; collapsed,
     // it is the only place that can show it. Blocked/done marks always stay.
     const status = space.status && (!open || space.status !== "working") ? this.indicator(space.status, t) : null;
     const click = (_e, cx) => {
@@ -237,11 +238,22 @@ export default class SpaceTree extends View {
       .h(34).flex_none().pl(26).pr(6).gap(6).relative().items_center()
       .when(!card, (el) => el.rounded(6))
       .when(card, (el) => el.bg(t.raised))
-      .when(!current, (el) => el.hover((s) => s.bg(t.hover)))
       .when(tab.settled, (el) => el.opacity(0.55))
+      .on_hover((hovered, cx) => {
+        if (hovered && this.hoveredTab !== tab.id) {
+          this.hoveredTab = tab.id;
+          cx.notify();
+        } else if (!hovered && this.hoveredTab === tab.id) {
+          this.hoveredTab = null;
+          cx.notify();
+        }
+      })
       .on_mouse_down("left", (e) => { if (e.click_count === 2) run("tab.rename", { id: tab.id }); })
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.tabMenu(space, tab); })
       .on_click(focus)
+      // Hover and selection use the same inset pill, so both follow the card's shape.
+      .when(!current && this.hoveredTab === tab.id, (el) => el.child(
+        div().absolute().left(4).right(4).top(2).bottom(2).rounded(6).bg(t.hover)))
       .when(current, (el) => el.child(
         div().absolute().left(4).right(4).top(2).bottom(2).rounded(6).bg(t.selected)))
       .child(this.programIcon(program, t))
