@@ -157,7 +157,9 @@ export default class SpaceTree extends View {
 
   spaceRow(space, t, narrow) {
     const open = this.open.has(space.id);
-    const status = space.status ? this.indicator(space.status, t) : null;
+    // An expanded space leaves the working spinner to its tab rows; collapsed,
+    // it is the only place that can show it. Blocked/done marks always stay.
+    const status = space.status && (!open || space.status !== "working") ? this.indicator(space.status, t) : null;
     const click = (_e, cx) => {
       if (!space.active) {
         run("space.select", { id: space.id });

@@ -10,6 +10,7 @@ A [Herdr](https://herdr.dev) layout that replaces the horizontal tab bar with a 
 - The horizontal tab bar is gone. Only the shown space and its current tab are highlighted.
 - Files and Changes toggle from the bottom-right status bar and are remembered per space.
 - The bottom bar shows the focused terminal's folder and live git branch.
+- The pane header shows the current tab's task name as a dim subtitle.
 - The sidebar collapses to a 44px icon rail; the Herdr logo stays at the top and unfolds it.
 - The Agents section collapses to a 28px summary row (`Working 2`, `Needs you 1`, `Done 2`, …) and gets its height back when expanded.
 

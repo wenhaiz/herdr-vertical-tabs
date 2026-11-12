@@ -13,7 +13,7 @@ A Herdr layout that turns the left sidebar into a directory tree: machines, then
   - tab rows: the program icon, the tab name (or a terminal icon and name when it has no program), the agent-status mark, and a close × on the current tab. The current tab uses the stronger `selected` fill. Tab rows are 34px tall, space rows 30px, machine rows 26px.
   - an open space ends with a dim `+ New tab` row.
 - **Agents section** under the tree: a header row with the title, a sort button (clock/layers), and a double-chevron button at the far right. Expanded, it lists agents grouped by priority or space. Collapsed, the header is 28px tall and shows a summary such as `Working 2` or `Needs you 1 Done 2`.
-- **Main area:** one terminal card (or the active tab's split panes) with a 30px pane header: program icon, agent or program name, status mark, and split-right / split-down / zoom / close buttons on hover.
+- **Main area:** one terminal card (or the active tab's split panes) with a 30px pane header: program icon, agent or program name, the tab's task name as a dim subtitle, blocked/done status, and split-right / split-down / zoom / close buttons on hover. There is no working spinner in the header; the tree and Agents list show progress.
 - **Bottom left:** the Agents header when collapsed, exactly aligned with the bottom bar on its right.
 - **Bottom right:** a 28px status bar with the machine, the focused folder (`~` for home), the live git branch, the palette shortcut hint, and Files / Changes toggles at the far right.
 - **Collapsed sidebar (44px):** an icon-only rail: the Herdr logo at the top, then machine icons, space avatars, and tab icons arranged in one icon column and one status column. No `+` buttons are shown in the rail; clicking the logo unfolds the sidebar.
@@ -24,7 +24,7 @@ A Herdr layout that turns the left sidebar into a directory tree: machines, then
 - Click a space: if it is not the shown space, select it and expand its tabs; if it is already shown, collapse or expand it. Clicking its chevron only toggles. Several spaces can stay expanded.
 - Click a tab to select its space and show it. Double-click a tab to rename it. Right-click a space or tab opens the shipped context menu.
 - Only the shown space and its current tab are highlighted; other spaces' remembered tabs stay as plain list rows.
-- Status marks: a spinning ring means working; a 6px dot is blocked/done/idle in the corresponding theme color. A space shows its most urgent agent status.
+- Status marks: a spinning ring means working; a 6px dot is blocked/done/idle in the corresponding theme color. A space shows its most urgent agent status; when the space is expanded its working spinner is hidden (its tab rows show the loading), while blocked/done marks stay.
 - The `+` on a machine row appears only while hovering that row or when that machine holds the shown space. The tree's `+ New tab` row disappears in the 44px rail.
 - Open spaces, folded machines, and folded machine groups persist per window in localStorage.
 - Agents: click the header (or the chevron at its right) to collapse or expand. Collapsed, the layout block shrinks to 28px and the summary shows blocked/working/done counts (idle only when nothing else is present). The state and the last open height persist. In the 44px rail the section always stays open because the rail has no title row.
@@ -54,7 +54,7 @@ Mods:
 - `agents-fold` — a clone of the shipped `agents` mod (0.1.15) with a collapsible section header and the summary. It finds its own layout block by `content.mod` and calls `layout.resize` (px 28 when closed, the remembered weight/px when open). localStorage: `agents.closed`, `agents.size`. Shipped agent rows, pinned agents, sub-agent trees, sort menu and pin migration are unchanged.
 - `chrome-fold` — a clone of `workspace-chrome` used as the brand bar: logo, search, settings, collapse; the collapsed rail shows the logo and folds to 44px (instead of the shipped 76px on macOS). No footer branch.
 - `status-cwd` — a clone of `workspace-status` without the agents count, plus the focused terminal's folder and live branch. It keeps the palette-hint logic and the same 28px bottom-bar look.
-- `pane-cwdless` — a clone of `pane` with the folder label removed and a spacer left in its place.
+- `pane-cwdless` — a clone of `pane` with the folder label and the working spinner removed; a spacer takes the folder's place. It shows the tab's task name (the tab name without its leading index) as a dim subtitle after the program name; unnamed tabs show none. Blocked and done marks stay.
 - `panel-toggles` — Files / Changes buttons placed in the bottom bar; runs `layout.show` / `layout.hide` / `layout.select` on the `panel` and `panel-body` nodes and remembers one panel per space.
 
 Shipped mods used as-is: `files`, `changes`, `menu`; many icons come from the shipped `mods/workspace-chrome/` assets, and `panel-toggles` uses `mods/files/file.svg` and `mods/changes/changes.svg`.
