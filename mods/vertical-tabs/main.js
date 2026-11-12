@@ -169,7 +169,7 @@ export default class SpaceTree extends View {
       }
     };
     if (narrow) {
-      return h_flex().id(`space-${space.id}`).h(30).flex_none().px(6).gap(3).rounded(7).items_center()
+      return h_flex().id(`space-${space.id}`).h(32).flex_none().px(6).gap(3).rounded(7).items_center()
         .tooltip(`${space.name}${open ? " · open" : ""}`)
         .when(space.active, (el) => el.bg(t.raised))
         .when(!space.active, (el) => el.hover((s) => s.bg(t.hover)))
@@ -179,7 +179,10 @@ export default class SpaceTree extends View {
         .child(this.railSlot(status, 11));
     }
     return h_flex().id(`space-${space.id}`)
-      .h(30).flex_none().px(7).gap(6).rounded(7).items_center()
+      .h(32).flex_none().px(7).gap(6).rounded(7).items_center()
+      // An expanded active space is the top of one card: its tab rows below
+      // share the same fill, so only the top corners are rounded.
+      .when(space.active && open, (el) => el.rounded_b(0))
       .when(space.active, (el) => el.bg(t.raised))
       .when(!space.active, (el) => el.hover((s) => s.bg(t.hover)))
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.spaceMenu(space); })
@@ -193,6 +196,14 @@ export default class SpaceTree extends View {
       .child(this.avatar(space, t))
       .child(div().flex_1().min_w(0).truncate()
         .text_color(space.active ? t.foreground : t.muted).child(space.name))
+      // An expanded space offers a new tab right on its row.
+      .when(open, (el) => el.child(
+        div().id(`space-new-tab-${space.id}`).size(20).flex_none().flex().items_center().justify_center().rounded(4).text_color(t.dim)
+          .hover((s) => s.bg(t.hover).text_color(t.foreground))
+          .tooltip("New tab")
+          .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+          .on_click((_e, cx) => { cx.stop_propagation(); run("tab.new", { space: space.id }); })
+          .child(svg("mods/workspace-chrome/plus.svg").size(11))))
       .when(Boolean(status), (el) => el.child(status));
   }
 
@@ -219,14 +230,20 @@ export default class SpaceTree extends View {
         .child(this.railSlot(this.programIcon(program, t)))
         .child(this.railSlot(status, 11));
     }
+    // Every tab of the shown space sits inside one raised card opened by the
+    // space row; the current tab gets a nested selected pill inside it.
+    const card = space.active;
     return h_flex().id(`tab-${tab.id}`)
-      .h(34).flex_none().pl(26).pr(6).gap(6).rounded(6).items_center()
-      .when(current, (el) => el.bg(t.selected))
+      .h(34).flex_none().pl(26).pr(6).gap(6).relative().items_center()
+      .when(!card, (el) => el.rounded(6))
+      .when(card, (el) => el.bg(t.raised))
       .when(!current, (el) => el.hover((s) => s.bg(t.hover)))
       .when(tab.settled, (el) => el.opacity(0.55))
       .on_mouse_down("left", (e) => { if (e.click_count === 2) run("tab.rename", { id: tab.id }); })
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.tabMenu(space, tab); })
       .on_click(focus)
+      .when(current, (el) => el.child(
+        div().absolute().left(4).right(4).top(2).bottom(2).rounded(6).bg(t.selected)))
       .child(this.programIcon(program, t))
       .child(div().flex_1().min_w(0).truncate().text_size(12.5)
         .text_color(current ? t.foreground : t.muted).child(tab.zoomed ? `${name} Z` : name))
@@ -237,16 +254,6 @@ export default class SpaceTree extends View {
           .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .on_click((_e, cx) => { cx.stop_propagation(); run("tab.close", { id: tab.id }); })
           .child(svg("mods/pane/close.svg").size(11))));
-  }
-
-  newTabRow(space, t) {
-    return h_flex().id(`new-tab-${space.id}`)
-      .h(26).flex_none().pl(26).pr(6).gap(6).rounded(6).items_center()
-      .text_size(12).text_color(t.dim)
-      .hover((s) => s.bg(t.hover).text_color(t.foreground))
-      .on_click(() => run("tab.new", { space: space.id }))
-      .child(svg("mods/workspace-chrome/plus.svg").size(12).flex_none())
-      .child(div().child("New tab"));
   }
 
   emptyRow(m, t) {
@@ -319,8 +326,10 @@ export default class SpaceTree extends View {
         rows.push({ key: space.id, el: this.spaceRow(space, t, narrow) });
         if (!this.open.has(space.id)) continue;
         for (const tab of space.tabs) rows.push({ key: tab.id, el: this.tabRow(space, tab, t, narrow) });
-        // The rail is icons only: no "New tab" rows, and so no + buttons.
-        if (!narrow) rows.push({ key: `new-${space.id}`, el: this.newTabRow(space, t) });
+        // The shown space's card gets a little breathing room below its last tab.
+        if (space.active && !narrow) {
+          rows.push({ key: `card-${space.id}`, el: h_flex().h(6).flex_none().rounded_b(7).bg(t.raised) });
+        }
       }
     }
 
