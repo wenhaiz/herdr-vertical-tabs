@@ -59,7 +59,7 @@ Mods:
 
 Shipped mods used as-is: `files`, `changes`, `menu`; many icons come from the shipped `mods/workspace-chrome/` assets, and `panel-toggles` uses `mods/files/file.svg` and `mods/changes/changes.svg`.
 
-The artwork in `preview.png` is an abstract structural rendering of `layouts/vertical-tabs.svg`, not a real screenshot, so it contains no folders, spaces, agent names or terminal content.
+`preview.png` is a real screenshot of the running layout; its main pane shows a clean shell.
 
 ## Watch out
 
