@@ -9,7 +9,7 @@ A [Herdr](https://herdr.dev) layout that replaces the horizontal tab bar with a 
 - Machines, spaces and tabs form one tree in the left sidebar. Click a space to select it and expand its tabs; click the active space again to collapse it.
 - The horizontal tab bar is gone. Only the shown space and its current tab are highlighted.
 - Files and Changes toggle from the bottom-right status bar and are remembered per space.
-- The Changes panel stacks every changed file as a collapsible diff card; cards start folded, and the summary cluster at the right of the header (file count, totals, expand/collapse-all icon) toggles them all. A filter narrows the list; the commit bar stays at the bottom.
+- The Changes panel stacks every changed file as a collapsible diff card; cards start folded, and the summary cluster at the right of the header (file count, totals, expand/collapse-all icon) toggles them all. The filter sits in the header row; the commit bar stays at the bottom.
 - The bottom bar shows the focused terminal's folder and live git branch.
 - The pane header shows the current tab's task name as a dim subtitle.
 - The sidebar collapses to a 44px icon rail; the Herdr logo stays at the top and unfolds it.
