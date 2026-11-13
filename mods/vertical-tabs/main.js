@@ -81,7 +81,10 @@ export default class SpaceTree extends View {
     openOverlay({ mod: "menu", kind: "popup", width: 200, height: 260, props: { tab: "tab", target: { id: tab.id, space: space.id } } });
   }
 
+  // Idle needs no mark: the dot earns its place only while something is
+  // working, blocked or done. Callers already skip a null indicator.
   indicator(status, t) {
+    if (status === "idle") return null;
     return status === "working"
       ? svg("mods/vertical-tabs/hourglass.svg").size(11).flex_none().text_color(t.working).loop("opacity", { from: 0.35, to: 0.8, period: 1200 })
       : div().size(6).rounded(3).flex_none().bg(t[status]);
@@ -195,7 +198,7 @@ export default class SpaceTree extends View {
           .on_click((_e, cx) => { cx.stop_propagation(); this.expand(space.id, !open, cx); })
           .child(svg(`mods/workspace-chrome/chevron-${open ? "down" : "right"}.svg`).size(11).text_color(t.dim)))
       .child(this.avatar(space, t))
-      .child(div().flex_1().min_w(0).truncate()
+      .child(div().flex_1().min_w(0).truncate().text_size(14)
         .text_color(space.active ? t.foreground : t.muted).child(space.name))
       // An expanded space offers a new tab right on its row.
       .when(open, (el) => el.child(
@@ -323,9 +326,12 @@ export default class SpaceTree extends View {
     const groups = remote.length ? [null, ...remote] : [null];
 
     const rows = [];
+    const gap = (key, height) => ({ key, el: h_flex().h(height).flex_none() });
     for (const m of groups) {
       const key = m ?? "";
       const mine = all.filter((s) => (s.machine ?? null) === m);
+      // Machines sit apart from one another; the first header needs no lead-in.
+      if (remote.length && rows.length) rows.push(gap(`machine-gap-${key}`, 12));
       if (remote.length) rows.push({ key: `machine-${key}`, el: this.machineRow(m, t, narrow, mine.some((s) => s.active)) });
       if (remote.length && this.closedMachines.has(key)) continue;
       if (!mine.length) {
@@ -334,14 +340,17 @@ export default class SpaceTree extends View {
         rows.push({ key: `empty-${key}`, el: loading ? this.loadingRow(m, t) : this.emptyRow(m, t) });
         continue;
       }
-      for (const space of mine) {
+      for (const [i, space] of mine.entries()) {
         rows.push({ key: space.id, el: this.spaceRow(space, t, narrow) });
-        if (!this.open.has(space.id)) continue;
-        for (const tab of space.tabs) rows.push({ key: tab.id, el: this.tabRow(space, tab, t, narrow) });
-        // The shown space's card gets a little breathing room below its last tab.
-        if (space.active && !narrow) {
-          rows.push({ key: `card-${space.id}`, el: h_flex().h(6).flex_none().rounded_b(7).bg(t.raised) });
+        if (this.open.has(space.id)) {
+          for (const tab of space.tabs) rows.push({ key: tab.id, el: this.tabRow(space, tab, t, narrow) });
+          // The shown space's card gets a little breathing room below its last tab.
+          if (space.active && !narrow) {
+            rows.push({ key: `card-${space.id}`, el: h_flex().h(6).flex_none().rounded_b(7).bg(t.raised) });
+          }
         }
+        // A space's rows stay together; the gap goes before the next space.
+        if (i < mine.length - 1) rows.push(gap(`space-gap-${space.id}`, narrow ? 2 : 8));
       }
     }
 
@@ -366,7 +375,7 @@ export default class SpaceTree extends View {
 
     return v_flex().id("root").size_full().min_h(0).bg(t.chrome).text_size(13)
       .on_size_change(measure)
-      .child(v_flex().id("vertical-tabs").flex_1().min_h(0).px(narrow ? 0 : 8).pt(6).pb(10)
+      .child(v_flex().id("vertical-tabs").flex_1().min_h(0).px(narrow ? 0 : 10).pt(8).pb(10)
         .overflow_y_scrollbar().mode("always").track_scroll(this.scroll)
         .children(rows.length ? rows.map((r) => r.el) : [
           h_flex().id("vertical-tabs-empty").h(30).px(8).items_center().text_size(12).text_color(t.dim).child("No spaces yet"),
