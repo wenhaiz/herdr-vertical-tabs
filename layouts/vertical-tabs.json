@@ -106,7 +106,7 @@
                       "id": "changes",
                       "type": "block",
                       "content": {
-                        "mod": "changes"
+                        "mod": "changes-picker"
                       }
                     }
                   ],
