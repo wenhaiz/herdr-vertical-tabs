@@ -263,7 +263,8 @@ export default class SpaceTree extends View {
       .child(div().flex_1().min_w(0).truncate().text_size(12.5)
         .text_color(current ? t.foreground : t.muted).child(tab.zoomed ? `${name} Z` : name))
       .when(Boolean(status), (el) => el.child(status))
-      .when(current, (el) => el.child(
+      // The current tab always offers close; any other tab shows it on hover.
+      .when(current || this.hoveredTab === tab.id, (el) => el.child(
         div().id(`close-${tab.id}`).size(16).flex_none().flex().items_center().justify_center().rounded(4).text_color(t.dim)
           .hover((s) => s.bg(t.hover).text_color(t.foreground))
           .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
