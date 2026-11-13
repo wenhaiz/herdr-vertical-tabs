@@ -9,7 +9,7 @@ A [Herdr](https://herdr.dev) layout that replaces the horizontal tab bar with a 
 - Machines, spaces and tabs form one tree in the left sidebar. Click a space to select it and expand its tabs; click the active space again to collapse it.
 - The horizontal tab bar is gone. Only the shown space and its current tab are highlighted.
 - Files and Changes toggle from the bottom-right status bar and are remembered per space.
-- The Changes panel puts a file picker at the top; the chosen file's diff fills the rest of the panel.
+- The Changes panel stacks every changed file as a collapsible diff card; cards start folded, and the summary cluster at the right of the header (file count, totals, expand/collapse-all icon) toggles them all. A filter narrows the list; the commit bar stays at the bottom.
 - The bottom bar shows the focused terminal's folder and live git branch.
 - The pane header shows the current tab's task name as a dim subtitle.
 - The sidebar collapses to a 44px icon rail; the Herdr logo stays at the top and unfolds it.
@@ -28,7 +28,7 @@ herdr-app do layout.switch --name vertical-tabs
 
 The copy is additive: it only adds this layout and its seven mods. Herdr redraws itself live, so no restart is needed.
 
-Requirements: Herdr 0.1.15 or newer. The layout uses our `changes-picker` (a fork of the shipped `changes`), the shipped `files` and `menu` mods, plus icons from the shipped `mods/workspace-chrome/`.
+Requirements: Herdr 0.1.15 or newer. The layout uses our `vertical-changes` (a fork of the shipped `changes`), the shipped `files` and `menu` mods, plus icons from the shipped `mods/workspace-chrome/`.
 
 ## Rebuild brief
 
@@ -36,4 +36,4 @@ Requirements: Herdr 0.1.15 or newer. The layout uses our `changes-picker` (a for
 
 ## License
 
-Apache-2.0. `agents-fold`, `chrome-fold`, `pane-cwdless`, `status-cwd` and `changes-picker` are derived from Herdr's shipped mods; `vertical-tabs` and `panel-toggles` are original.
+Apache-2.0. `agents-fold`, `chrome-fold`, `pane-cwdless`, `status-cwd` and `vertical-changes` are derived from Herdr's shipped mods; `vertical-tabs` and `panel-toggles` are original.

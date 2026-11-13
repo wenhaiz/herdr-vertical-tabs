@@ -106,7 +106,7 @@
                       "id": "changes",
                       "type": "block",
                       "content": {
-                        "mod": "changes-picker"
+                        "mod": "vertical-changes"
                       }
                     }
                   ],

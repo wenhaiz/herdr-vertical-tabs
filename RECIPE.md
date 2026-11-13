@@ -16,7 +16,7 @@ A Herdr layout that turns the left sidebar into a directory tree: machines, then
 - **Main area:** one terminal card (or the active tab's split panes) with a 30px pane header: program icon, agent or program name, the tab's task name as a dim subtitle, blocked/done status, and split-right / split-down / zoom / close buttons on hover. There is no working spinner in the header; the tree and Agents list show progress.
 - **Bottom left:** the Agents header when collapsed, exactly aligned with the bottom bar on its right.
 - **Bottom right:** a 28px status bar with the machine, the focused folder (`~` for home), the live git branch, the palette shortcut hint, and Files / Changes toggles at the far right.
-- **Changes panel:** a header (`Changes`, file count, `+`/`−` totals), a picker row naming the current file, the diff filling the rest, and the commit bar. Opening the picker covers the diff with a filter field and the changed files; each row shows its status, path and `+`/`−` counts.
+- **Changes panel:** a header with the title on the left and one summary cluster on the right (file count, `+`/`−` totals and an expand/collapse-all icon); the cluster is the control that flips all files. Below it a filter field, then every changed file as a card in one scrolling column. Each card header has a chevron, status, path and counts; clicking it folds the diff, and cards start folded. The diff shows old and new line-number columns, colored `+/−` marks and tinted added/removed rows. The commit bar sits at the bottom.
 - **Collapsed sidebar (44px):** an icon-only rail: the Herdr logo at the top, then machine icons, space avatars, and tab icons arranged in one icon column and one status column. No `+` buttons are shown in the rail; clicking the logo unfolds the sidebar.
 
 ## How it behaves
@@ -45,7 +45,7 @@ A Herdr layout that turns the left sidebar into a directory tree: machines, then
 - column `work`:
   - row `work-body`, padding 8, gap 8:
     - block `main`, `{ "tab": "active" }`, pane frame with `header` mod `pane-cwdless` (30px, top, reveal always), radius 10, gap 8, lone, background/border/focus.
-    - column `panel`, hidden, 368px, min 280, max 900 → stack `panel-body` (`active: "files"`) with blocks `files` and `changes-picker`.
+    - column `panel`, hidden, 368px, min 280, max 900 → stack `panel-body` (`active: "files"`) with blocks `files` and `vertical-changes`.
   - row `bottom`, 28px: block `status` (weight 1, mod `status-cwd`) and block `panel-toggles` (170px).
 - Root: `titlebar: "none"`, `traffic_lights: [12, 16]`, `background: "canvas"`, `terminal_padding: [14, 12]`, `preview: "layouts/vertical-tabs.svg"`.
 
@@ -56,7 +56,7 @@ Mods:
 - `chrome-fold` — a clone of `workspace-chrome` used as the brand bar: logo, search, settings, collapse; the collapsed rail shows the logo and folds to 44px (instead of the shipped 76px on macOS). No footer branch.
 - `status-cwd` — a clone of `workspace-status` without the agents count, plus the focused terminal's folder and live branch. It keeps the palette-hint logic and the same 28px bottom-bar look.
 - `pane-cwdless` — a clone of `pane` with the folder label and the working spinner removed; a spacer takes the folder's place. It shows the tab's task name (the tab name without its leading index) as a dim subtitle after the program name; unnamed tabs show none. Blocked and done marks stay.
-- `changes-picker` — a clone of `changes` whose file list is folded into a picker: the header shows the totals, the picker row names the current file, and its dropdown (a filter field plus the changed files) covers the diff area. The diff fills the rest. The first file opens by default; picking another loads its diff. Commit behavior is unchanged.
+- `vertical-changes` — a clone of `changes` with a GitLab-style scrolling view: every changed file is a collapsible card in one column, each with its diff loaded up front and shown with old/new line numbers and tinted `+/−` rows. Cards start folded; the header's summary cluster (file count, totals, expand/collapse-all icon) is the control that flips the whole list. A filter above the column narrows it; the commit bar stays at the bottom. The diffs reload when the file list or its line counts change.
 - `panel-toggles` — Files / Changes buttons placed in the bottom bar; runs `layout.show` / `layout.hide` / `layout.select` on the `panel` and `panel-body` nodes and remembers one panel per space.
 
 Shipped mods used as-is: `files`, `menu`; many icons come from the shipped `mods/workspace-chrome/` assets, and `panel-toggles` uses `mods/files/file.svg` and `mods/changes/changes.svg`.
@@ -68,7 +68,7 @@ Shipped mods used as-is: `files`, `menu`; many icons come from the shipped `mods
 - The layout's block ids are load-bearing: `sidebar`, `panel`, `panel-body` are found by name. `agents-fold` finds its block by `content.mod === "agents-fold"`; if you rename the mod, update `blockNode()`.
 - The Agents block must allow a 28px height (`min` ≤ 28), otherwise the closed section is clamped.
 - Icons are borrowed from shipped mods (`mods/workspace-chrome/*.svg`, `mods/files/file.svg`, `mods/changes/changes.svg`, `mods/pane/close.svg`). If a future Herdr renames them, update the paths.
-- The cloned mods are derived from Herdr 0.1.15 and are licensed Apache-2.0 (see `LICENSE`); they can drift from a later shipped version. `changes-picker` is a clone of `changes`; `mods/changes/changes.svg` still supplies the toggle icon.
+- The cloned mods are derived from Herdr 0.1.15 and are licensed Apache-2.0 (see `LICENSE`); they can drift from a later shipped version. `vertical-changes` is a clone of `changes`; `mods/changes/changes.svg` still supplies the toggle icon.
 - The 44px rail is narrower than the macOS traffic-light area, so the window buttons float over the top of the rail. Change the collapse target back to 76px (and the sidebar `min`) if that matters.
 - `status-cwd` shows a branch only when the focused pane's live folder is in a git repo; the home space shows only `~`.
 - There is no `keys.json`; everything uses Herdr's default shortcuts.
@@ -76,7 +76,7 @@ Shipped mods used as-is: `files`, `menu`; many icons come from the shipped `mods
 
 ## Done when
 
-- `herdr-app check` passes for every bundled mod (`vertical-tabs`, `agents-fold`, `chrome-fold`, `pane-cwdless`, `status-cwd`, `changes-picker`, `panel-toggles`).
+- `herdr-app check` passes for every bundled mod (`vertical-tabs`, `agents-fold`, `chrome-fold`, `pane-cwdless`, `status-cwd`, `vertical-changes`, `panel-toggles`).
 - Copying `layouts/` and `mods/` into `~/.config/herdr-app` and running `herdr-app do layout.switch --name vertical-tabs` shows machine groups, spaces and tabs, with no horizontal tab bar.
 - Clicking a space expands its tabs; clicking a tab shows it; only the shown space and its current tab are highlighted.
 - Right-click on a space or tab opens a menu; double-clicking a tab renames it; the `+` on an expanded space starts a terminal in that space.

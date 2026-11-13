@@ -1,5 +1,5 @@
 import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex, InputState, Input, Scrollbar, v_virtual_list } from "gpui-base";
+import { v_flex, h_flex, InputState, Input, Scrollbar } from "gpui-base";
 import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings } from "herdr";
 
 function location() {
@@ -17,21 +17,24 @@ const countLines = (text) => text ? text.split("\n").length - Number(text.endsWi
 // Text draws a tab as nothing: pad each to the next 4-column stop.
 const untab = (text) => text.replace(/[^\t]*\t/g, (s) => s.slice(0, -1).padEnd((s.length - 1) - (s.length - 1) % 4 + 4));
 
-// Numbers each diff line once, so a frame only draws the rows on screen.
+// Numbers every diff line once, old and new, the way a side-by-side gutter
+// shows them: a deletion has only the old number, an addition only the new.
 function diffRows(lines) {
   let old = 0, next = 0;
   return lines.map((line) => {
     const match = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
     if (match) { old = +match[1]; next = +match[2]; return { kind: "@", text: line }; }
     const kind = line[0];
-    if (kind === "-") return { kind, number: old++, text: untab(line.slice(1)) || " " };
-    if (kind === "+") return { kind, number: next++, text: untab(line.slice(1)) || " " };
-    if (kind === " ") { old++; return { kind, number: next++, text: untab(line.slice(1)) || " " }; }
+    if (kind === "-") return { kind, oldNumber: old++, text: untab(line.slice(1)) || " " };
+    if (kind === "+") return { kind, newNumber: next++, text: untab(line.slice(1)) || " " };
+    if (kind === " ") return { kind, oldNumber: old++, newNumber: next++, text: untab(line.slice(1)) || " " };
     return { kind: "", text: line };
   });
 }
+// A file's horizontal extent: two number columns, the +/− mark and the code.
+const diffWidth = (rows) => Math.max(360, ...rows.map((row) => (row.text.length + 1) * 7 + 130));
 
-// A change's one-letter mark, colored the way the list and the picker show it.
+// A change's one-letter mark, colored the way the file list shows it.
 const statusColor = (f, t) => f.status === "A" ? t.ansi2 : f.status === "D" || f.status === "U" ? t.ansi1 : t.blocked;
 const splitPath = (path) => {
   const parts = path.split("/"), name = parts.pop();
@@ -52,8 +55,9 @@ const diffTone = (t) => onDark(t)
 
 export default class Changes extends View {
   init(_props, cx) {
-    this.files = []; this.rows = []; this.diffWidth = 0; this.message = ""; this.handle = cx.focus_handle();
-    this.picker = false; this.query = "";
+    this.files = []; this.diffs = new Map(); this.expanded = new Set();
+    this.loading = false; this.loadId = 0; this.message = ""; this.handle = cx.focus_handle();
+    this.query = "";
     this.search = InputState.new({ placeholder: "Filter files" });
     this.search.on("change", (_e, cx) => {
       this.query = this.search.value();
@@ -89,10 +93,9 @@ export default class Changes extends View {
     if (this.loading || this.busy) return;
     const { cwd, on } = location(), context = key();
     if (context !== this.context) {
-      this.context = context; this.root = null; this.files = []; this.open = null;
-      this.setLines([]); this.message = ""; this.input.set_value(""); this.error = null; this.note = null;
-      this.watched = null; this.limited = false;
-      this.picker = false; this.query = ""; this.search.set_value("");
+      this.context = context; this.root = null; this.files = []; this.diffs = new Map(); this.expanded.clear();
+      this.signature = null; this.message = ""; this.input.set_value(""); this.error = null; this.note = null;
+      this.watched = null; this.limited = false; this.query = ""; this.search.set_value("");
     }
     if (!cwd) return;
     this.loading = true;
@@ -100,7 +103,7 @@ export default class Changes extends View {
       try {
         const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd, on });
         if (key() !== context) return;
-        if (top.code !== 0) { this.root = null; this.files = []; this.setLines([]); this.open = null; this.error = "Not a git repository"; return; }
+        if (top.code !== 0) { this.root = null; this.files = []; this.diffs = new Map(); this.error = "Not a git repository"; return; }
         const root = top.stdout.trim(), git = (args) => exec("git", [...READ, ...args], { cwd: root, on });
         const status = await git(["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all"]);
         if (status.code !== 0) throw new Error(status.stderr);
@@ -128,24 +131,42 @@ export default class Changes extends View {
         if (key() !== context) return;
         this.root = root; this.on = on; this.hasHead = head.code === 0; this.files = files; this.limited = entries.length > 1000; this.error = null;
         this.watch(root, cx);
-        if (this.open && !files.some((f) => f.path === this.open)) { this.open = null; this.setLines([]); }
-        // The first file's diff shows until you pick another.
-        if (!this.open && files.length) this.open = files[0].path;
-        if (this.open) {
-          try { await this.load(this.open, context); }
-          catch { if (key() === context) this.setLines(["Cannot preview this diff (too large or unreadable)"]); }
+        // Reload the diffs only when the file list itself changed; the timer
+        // and the folder watch must not re-run git diff for every file.
+        const signature = files.map((f) => `${f.path}\0${f.status}\0${f.add}\0${f.del}`).join("\n");
+        const reload = signature !== this.signature;
+        this.signature = signature;
+        if (reload) {
+          const generation = ++this.loadId;
+          cx.spawn(async (cx) => this.loadDiffs(files, context, generation, cx));
         }
       } catch (e) { if (key() === context) this.error = String(e); }
       finally { this.loading = false; cx.notify(); }
     });
   }
 
-  async load(path, context) {
-    const file = this.files.find((f) => f.path === path), root = this.root, on = this.on;
-    if (!file) return;
+  // Every file's diff is loaded up front, so one scroll shows them all.
+  async loadDiffs(files, context, generation, cx) {
+    this.diffs = new Map();
+    cx.notify();
+    for (const file of files) {
+      if (this.loadId !== generation || key() !== context) return;
+      try {
+        const rows = diffRows(await this.fetchLines(file));
+        if (this.loadId !== generation || key() !== context) return;
+        this.diffs.set(file.path, { rows, width: diffWidth(rows) });
+      } catch {
+        this.diffs.set(file.path, { rows: [], width: 360, error: "Cannot preview this diff (too large or unreadable)" });
+      }
+      cx.notify();
+    }
+  }
+
+  async fetchLines(file) {
+    const root = this.root, on = this.on;
     let lines;
     if (file.fresh || (!this.hasHead && file.status === "A")) {
-      const text = await readTextFile(`${root}/${path}`, { on }).catch(() => null);
+      const text = await readTextFile(`${root}/${file.path}`, { on }).catch(() => null);
       if (text === null) lines = ["Cannot preview this file (binary, too large, or unreadable)"];
       else if (text.includes("\0")) lines = ["Binary file · no text diff"];
       else {
@@ -153,40 +174,12 @@ export default class Changes extends View {
         lines = [`@@ -0,0 +1,${file.add} @@`, ...text.slice(0, 400000).replace(/\n$/, "").split("\n").slice(0, 1500).map(l => `+${l}`)];
       }
     } else {
-      const r = await exec("git", [...READ, "diff", ...(this.hasHead ? ["HEAD"] : []), "--no-ext-diff", "--no-textconv", "--no-color", "--", path], { cwd: root, on });
+      const r = await exec("git", [...READ, "diff", ...(this.hasHead ? ["HEAD"] : []), "--no-ext-diff", "--no-textconv", "--no-color", "--", file.path], { cwd: root, on });
       if (r.code !== 0) throw new Error(r.stderr);
       const all = r.stdout.replace(/\n$/, "").split("\n"), first = all.findIndex((l) => l.startsWith("@@"));
       lines = first < 0 ? [file.binary ? "Binary file changed" : "No text diff available"] : all.slice(first);
     }
-    if (key() === context && this.open === path) this.setLines(lines.slice(0, 1500).map(line => line.length > 4000 ? line.slice(0, 4000) + "… (line truncated)" : line));
-  }
-
-  setLines(lines) {
-    this.rows = diffRows(lines);
-    this.diffWidth = Math.max(300, ...this.rows.map(row => (row.text.length + 1) * 7 + 50));
-  }
-
-  togglePicker(cx) {
-    this.picker = !this.picker;
-    if (this.picker) {
-      this.query = ""; this.search.set_value("");
-      // The field mounts on this frame; focus it once the frame is laid out.
-      cx.timer.after(50, () => this.search.focus());
-    }
-    cx.notify();
-  }
-
-  pick(path, cx) {
-    this.picker = false; this.query = ""; this.search.set_value(""); this.note = null;
-    if (this.open === path) { cx.notify(); return; }
-    this.open = path; this.setLines([]);
-    const context = this.context;
-    cx.spawn(async (cx) => {
-      try { await this.load(path, context); }
-      catch (e) { if (key() === context && this.open === path) this.note = `Cannot preview this diff (too large or unreadable): ${e}`; }
-      cx.notify();
-    });
-    cx.notify();
+    return lines.slice(0, 1500).map(line => line.length > 4000 ? line.slice(0, 4000) + "… (line truncated)" : line);
   }
 
   commit(cx) {
@@ -206,88 +199,94 @@ export default class Changes extends View {
     cx.notify();
   }
 
-  diffRow({ kind, number, text }, t, d) {
+  diffRow({ kind, oldNumber, newNumber, text }, t, d) {
     if (kind === "@") return div().w_full().px(12).h(20).flex_none().truncate().bg(t.raised).text_color(t.dim).child(text);
     const tone = kind === "+" ? d.plus : kind === "-" ? d.minus : t.dim;
-    return h_flex().w_full().h(20).flex_none().gap(10).when(kind === "+", (e) => e.bg(d.add)).when(kind === "-", (e) => e.bg(d.del))
-      .child(h_flex().flex_none().gap(4)
-        .child(div().w(30).flex_none().text_right().text_color(tone).child(number === undefined ? "" : String(number)))
-        .child(div().w(8).flex_none().text_color(tone).child(kind === "+" ? "+" : kind === "-" ? "-" : "")))
+    return h_flex().w_full().h(20).flex_none().pl(6).gap(6).when(kind === "+", (e) => e.bg(d.add)).when(kind === "-", (e) => e.bg(d.del))
+      .child(div().w(34).flex_none().text_right().text_color(kind === "+" ? t.dim : tone).child(oldNumber === undefined ? "" : String(oldNumber)))
+      .child(div().w(34).flex_none().text_right().text_color(kind === "-" ? t.dim : tone).child(newNumber === undefined ? "" : String(newNumber)))
+      .child(div().w(8).flex_none().text_color(tone).child(kind === "+" ? "+" : kind === "-" ? "-" : ""))
       .child(div().flex_1().min_w(0).truncate().child(text));
   }
 
-  // The top row names the file whose diff fills the panel; pressing it opens
-  // the list of changed files.
-  pickerBar(t, current) {
-    const [dir, name] = current ? splitPath(current.path) : ["", ""];
-    return h_flex().flex_none().px(8).pt(8).pb(8)
-      .child(h_flex().id("changes-picker").w_full().h(30).px(8).gap(8).items_center().rounded(7).border_1()
-        .border_color(this.picker ? t.accent : t.border)
-        .bg(this.picker ? t.hover : t.background)
-        .when(this.files.length > 0, (e) => e.cursor_pointer().hover((s) => s.bg(t.hover)).on_click((_e, cx) => this.togglePicker(cx)))
-        .child(div().w(14).flex_none().text_size(11).text_color(current ? statusColor(current, t) : t.dim).child(current ? current.status : "·"))
-        .child(current
-          ? h_flex().flex_1().min_w(0).child(div().text_color(t.dim).truncate().child(dir)).child(div().min_w(0).truncate().child(name))
-          : div().flex_1().min_w(0).truncate().text_color(t.dim).child(this.files.length ? "Select a file" : "No changed files"))
-        .when(current?.add > 0, (e) => e.child(div().flex_none().text_size(11).text_color(t.ansi2).child(`+${current.add}`)))
-        .when(current?.del > 0, (e) => e.child(div().flex_none().text_size(11).text_color(t.ansi1).child(`−${current.del}`)))
-        .child(svg("mods/workspace-chrome/chevron-down.svg").size(11).flex_none().text_color(t.dim)));
+  // One file's card: a header that folds it, then its diff.
+  fileSection(file, t, d, cx) {
+    const open = this.expanded.has(file.path);
+    const [dir, name] = splitPath(file.path);
+    return v_flex().flex_none().rounded(8).overflow_hidden().relative()
+      .child(h_flex().id(`file-head-${file.path}`).h(30).flex_none().px(8).gap(6).items_center().bg(t.raised).rounded_t(8).cursor_pointer()
+        .when(!open, (el) => el.rounded_b(8))
+        .hover((s) => s.bg(t.hover))
+        .on_click((_e, cx) => {
+          if (open) this.expanded.delete(file.path);
+          else this.expanded.add(file.path);
+          cx.notify();
+        })
+        .child(svg(`mods/workspace-chrome/chevron-${open ? "down" : "right"}.svg`).size(11).flex_none().text_color(t.dim))
+        .child(div().flex_none().text_size(11).text_color(statusColor(file, t)).child(file.status))
+        .child(h_flex().flex_1().min_w(0).child(div().text_color(t.dim).truncate().child(dir)).child(div().min_w(0).truncate().text_color(t.foreground).child(name)))
+        .when(file.add > 0, (e) => e.child(div().flex_none().text_size(11).text_color(d.plus).child(`+${file.add}`)))
+        .when(file.del > 0, (e) => e.child(div().flex_none().text_size(11).text_color(d.minus).child(`−${file.del}`))))
+      .when(open, (el) => el.child(this.fileDiff(file, t, d)))
+      .child(div().absolute().inset_0().rounded(8).border_1().border_color(t.border));
   }
 
-  fileRow(f, t) {
-    const [dir, name] = splitPath(f.path);
-    return h_flex().id(`pick-${f.path}`).h(26).flex_none().px(8).gap(8).items_center().rounded(5).cursor_pointer()
-      .when(this.open === f.path, (e) => e.bg(t.selected))
-      .when(this.open !== f.path, (e) => e.hover((s) => s.bg(t.hover)))
-      .on_click((_e, cx) => this.pick(f.path, cx))
-      .child(div().w(14).flex_none().text_size(11).text_color(statusColor(f, t)).child(f.status))
-      .child(h_flex().flex_1().min_w(0).child(div().text_color(t.dim).truncate().child(dir)).child(div().min_w(0).truncate().child(name)))
-      .when(f.add > 0, (e) => e.child(div().flex_none().text_size(11).text_color(t.ansi2).child(`+${f.add}`)))
-      .when(f.del > 0, (e) => e.child(div().flex_none().text_size(11).text_color(t.ansi1).child(`−${f.del}`)));
-  }
-
-  // A card over the diff area: filter field, then the changed files.
-  pickerCard(t, matches) {
-    const listHeight = Math.min(280, Math.max(30, matches.length * 26 + 8));
-    return v_flex().absolute().top(0).left(8).right(8).rounded(8).overflow_hidden().bg(t.popover).border_1().border_color(t.border)
-      .child(div().p(6)
-        .child(div().h(28).px(8).flex().items_center().rounded(6).border_1().border_color(t.border).bg(t.background)
-          .child(Input.new(this.search).h_full().text_size(12).text_color(t.foreground))))
-      .child(div().relative().h(listHeight)
-        .child(v_flex().id("changes-picker-list").absolute().inset_0().overflow_y_scroll().p(4).pr(10)
-          .children(matches.map((f) => this.fileRow(f, t)))
-          .when(!matches.length, (e) => e.child(div().p(8).text_color(t.dim).child("No matching files"))))
-        .child(Scrollbar.vertical("changes-picker-list").absolute().inset_0()));
+  fileDiff(file, t, d) {
+    const state = this.diffs.get(file.path);
+    // Every piece draws the card's border on its own edges, so the 1px line
+    // follows each rounded corner instead of being clipped square.
+    const note = (text, color) => div().px(12).py(8).text_size(11).text_color(color).rounded_b(8).child(text);
+    if (!state) return note("Loading diff…", t.dim);
+    if (state.error) return note(state.error, t.ansi1);
+    if (!state.rows.length) return note("No text diff", t.dim);
+    // The card's overflow is clipped square, so the last row's tint is carried
+    // into a rounded bottom strip; without it the color shows past the corner.
+    const last = state.rows[state.rows.length - 1];
+    const tone = last.kind === "+" ? d.add : last.kind === "-" ? d.del : last.kind === "@" ? t.raised : t.background;
+    return v_flex().w_full()
+      .child(div().relative().w_full().overflow_x_scrollbar()
+        .child(div().w_full().min_w(state.width).font_family(settings().font_family ?? "JetBrains Mono").text_size(11)
+          .children(state.rows.map((row) => this.diffRow(row, t, d)))))
+      // 16px tall so the 8px bottom radius is not clamped to half the box.
+      .child(div().w_full().h(16).flex_none().rounded_b(8).bg(tone));
   }
 
   render(cx) {
     if (key() !== this.context) this.refresh(cx);
     const t = theme(), d = diffTone(t), add = this.files.reduce((n, f) => n + f.add, 0), del = this.files.reduce((n, f) => n + f.del, 0);
     const enabled = Boolean(this.message.trim() && this.root && !this.busy && !this.loading);
-    const current = this.files.find((f) => f.path === this.open);
     const query = this.query.trim().toLowerCase();
-    const matches = query ? this.files.filter((f) => f.path.toLowerCase().includes(query)) : this.files;
+    const shown = query ? this.files.filter((f) => f.path.toLowerCase().includes(query)) : this.files;
+    const allOpen = this.files.length > 0 && this.files.every((f) => this.expanded.has(f.path));
     return v_flex().id("changes").size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background).border_1().border_color(t.border).text_color(t.foreground).text_size(13).track_focus(this.handle)
       .on_key_down((e, cx) => {
-        if (e.key !== "escape") return;
-        if (this.picker) { this.picker = false; cx.stop_propagation(); cx.notify(); return; }
-        if (this.typing) { this.typing = false; this.handle.focus(); cx.stop_propagation(); cx.notify(); }
+        if (e.key === "escape" && this.typing) { this.typing = false; this.handle.focus(); cx.stop_propagation(); cx.notify(); }
       })
       .child(h_flex().h(42).flex_none().px(14).gap(8).items_center().border_b(1).border_color(t.border)
         .child(div().font_semibold().child("Changes"))
-        .child(div().px(5).py(1).rounded(4).border_1().border_color(t.border).text_size(10).text_color(t.muted).child(`${this.files.length} files`))
-        .child(div().flex_1()).child(div().text_size(11).text_color(t.ansi2).child(`+${add}`)).child(div().text_size(11).text_color(t.ansi1).child(`−${del}`)))
-      .child(this.pickerBar(t, current))
+        .child(div().flex_1().min_w(0).h(26).px(8).flex().items_center().rounded(6).border_1().border_color(t.border).bg(t.background)
+          .child(Input.new(this.search).h_full().text_size(12).text_color(t.foreground)))
+        // The summary cluster is one control: hover or click anywhere on it.
+        .child(h_flex().h(28).px(6).rounded(6).gap(8).items_center()
+          .when(this.files.length > 0, (el) => el.cursor_pointer()
+            .hover((s) => s.bg(t.hover))
+            .tooltip(allOpen ? "Collapse all" : "Expand all")
+            .on_click((_e, cx) => {
+              if (allOpen) this.expanded.clear();
+              else for (const f of this.files) this.expanded.add(f.path);
+              cx.notify();
+            }))
+          .child(div().px(5).py(1).rounded(4).text_size(11).text_color(t.muted).child(`${this.files.length} files`))
+          .child(div().text_size(11).text_color(d.plus).child(`+${add}`)).child(div().text_size(11).text_color(d.minus).child(`−${del}`))
+          .when(this.files.length > 0, (el) => el.child(svg(`mods/vertical-changes/${allOpen ? "collapse" : "expand"}.svg`).size(14).flex_none().text_color(t.dim)))))
       .when(this.limited, el => el.child(div().px(12).py(4).text_size(11).text_color(t.dim).child("Showing the first 1,000 changed files")))
-      .child(div().flex_1().min_h(0).relative().overflow_hidden().font_family(settings().font_family ?? "JetBrains Mono").text_size(11)
-        .child(div().id("changes-diff-x").size_full().overflow_x_scrollbar()
-          .child(div().w_full().min_w(this.diffWidth).h_full().child(v_virtual_list("changes-diff", this.rows.length, 20, (i) => String(i),
-            (range) => this.rows.slice(range.start, range.end).map((row) => this.diffRow(row, t, d))).size_full())))
-        .child(Scrollbar.vertical("changes-diff").viewport_from_layout().absolute().inset_0())
-        .when(!this.files.length, (e) => e.child(div().p(12).text_color(t.dim).child(this.error || (this.loading ? "Loading changes…" : this.root ? "No uncommitted changes" : "No folder"))))
-        .when(this.picker, (e) => e
-          .child(div().absolute().inset_0().on_mouse_down("left", (_e, cx) => { this.picker = false; cx.notify(); }))
-          .child(this.pickerCard(t, matches))))
+      .child(div().flex_1().min_h(0).relative()
+        .when(shown.length > 0, (el) => el
+          .child(v_flex().id("changes-files").absolute().inset_0().overflow_y_scroll().p(6).pr(12).gap(10)
+            .children(shown.map((file) => this.fileSection(file, t, d, cx))))
+          .child(Scrollbar.vertical("changes-files").absolute().inset_0()))
+        .when(!shown.length, (el) => el.child(h_flex().absolute().inset_0().items_center().justify_center().p(16).text_color(t.dim).child(
+          this.files.length ? "No matching files" : this.error || (this.loading ? "Loading changes…" : this.root ? "No uncommitted changes" : "No folder")))))
       .when(Boolean(this.note), (e) => e.child(div().px(10).pb(8).text_size(11).text_color(t.ansi1).child(this.note)))
       .child(h_flex().flex_none().p(10).gap(8).border_t(1).border_color(t.border)
         .child(div().id("commit-message").flex_1().min_w(0).h(32).px(10).flex().items_center().rounded(8).border_1().border_color(this.typing ? t.accent : t.border).cursor_text().on_mouse_down("left", (_e, cx) => cx.stop_propagation()).child(Input.new(this.input).h_full().text_size(12).text_color(t.foreground)))
