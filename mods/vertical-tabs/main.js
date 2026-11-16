@@ -17,6 +17,13 @@ const NARROW = 170;
 // Avatar colors shared with the shipped spaces mod, one strong color per hue.
 const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
 const PALETTE = ["ansi6", "ansi3", "ansi4", "ansi5", "ansi2", "ansi1"];
+// A fill lighter than hover: half its alpha when it carries one, otherwise
+// half-opacity over the sidebar.
+const faint = (color) => {
+  const hex = color.slice(1);
+  const a = hex.length === 8 ? Math.round(parseInt(hex.slice(6), 16) / 2) : 128;
+  return `#${hex.slice(0, 6)}${a.toString(16).padStart(2, "0")}`;
+};
 
 export default class SpaceTree extends View {
   init(_props, cx) {
@@ -214,8 +221,8 @@ export default class SpaceTree extends View {
     if (narrow) {
       return h_flex().id(`space-${space.id}`).h(32).flex_none().px(6).gap(3).rounded(7).items_center()
         .tooltip(`${space.name}${open ? " · open" : ""}`)
-        .when(space.active, (el) => el.bg(t.raised))
-        .when(!space.active, (el) => el.hover((s) => s.bg(t.hover)))
+        .when(space.active, (el) => el.bg(t.selected))
+        .when(!space.active, (el) => el.bg(faint(t.hover)))
         .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.spaceMenu(space); })
         .on_click(click)
         .child(this.railSlot(this.avatar(space, t)))
@@ -223,11 +230,11 @@ export default class SpaceTree extends View {
     }
     return h_flex().id(`space-${space.id}`)
       .h(32).flex_none().px(7).gap(6).rounded(7).items_center()
-      // An expanded active space is the top of one card: its tab rows below
-      // share the same fill, so only the top corners are rounded.
-      .when(space.active && open, (el) => el.rounded_b(0))
-      .when(space.active, (el) => el.bg(t.raised))
-      .when(!space.active, (el) => el.hover((s) => s.bg(t.hover)))
+      // An expanded space is one card: its rows below share the fill, so only
+      // the top corners are rounded.
+      .when(open, (el) => el.rounded_b(0))
+      .when(space.active, (el) => el.bg(t.selected))
+      .when(!space.active, (el) => el.bg(faint(t.hover)))
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.spaceMenu(space); })
       .on_click(click)
       .child(
@@ -250,7 +257,7 @@ export default class SpaceTree extends View {
       .when(Boolean(status), (el) => el.child(status));
   }
 
-  tabRow(space, tab, t, narrow) {
+  tabRow(space, tab, t, narrow, last) {
     const program = this.program(tab);
     const name = this.tabName(tab);
     const status = tab.status ? this.indicator(tab.status, t) : null;
@@ -276,10 +283,13 @@ export default class SpaceTree extends View {
     // Every tab of the shown space sits inside one raised card opened by the
     // space row; the current tab gets a nested selected pill inside it.
     const card = space.active;
+    const fill = card ? t.selected : faint(t.hover);
+    const pill = t.hover;
+    const pillBottom = last ? 6 : 2;
     return h_flex().id(`tab-${tab.id}`)
       .h(34).flex_none().pl(26).pr(6).gap(6).relative().items_center()
-      .when(!card, (el) => el.rounded(6))
-      .when(card, (el) => el.bg(t.raised))
+      .bg(fill)
+      .when(last, (el) => el.h(38).pb(4).rounded_b(7))
       .when(tab.settled, (el) => el.opacity(0.55))
       .on_hover((hovered, cx) => {
         if (hovered && this.hoveredTab !== tab.id) {
@@ -295,9 +305,9 @@ export default class SpaceTree extends View {
       .on_click(focus)
       // Hover and selection use the same inset pill, so both follow the card's shape.
       .when(!current && this.hoveredTab === tab.id, (el) => el.child(
-        div().absolute().left(4).right(4).top(2).bottom(2).rounded(6).bg(t.hover)))
+        div().absolute().left(4).right(4).top(2).bottom(pillBottom).rounded(6).bg(pill)))
       .when(current, (el) => el.child(
-        div().absolute().left(4).right(4).top(2).bottom(2).rounded(6).bg(t.selected)))
+        div().absolute().left(4).right(4).top(2).bottom(pillBottom).rounded(6).bg(t.hover)))
       .child(this.programIcon(program, t))
       .child(div().flex_1().min_w(0).truncate().text_size(12.5)
         .text_color(current ? t.foreground : t.muted).child(tab.zoomed ? `${name} Z` : name))
@@ -383,10 +393,8 @@ export default class SpaceTree extends View {
       for (const [i, space] of mine.entries()) {
         rows.push({ key: space.id, el: this.spaceRow(space, t, narrow) });
         if (this.open.has(space.id)) {
-          for (const tab of space.tabs) rows.push({ key: tab.id, el: this.tabRow(space, tab, t, narrow) });
-          // The shown space's card gets a little breathing room below its last tab.
-          if (space.active && !narrow) {
-            rows.push({ key: `card-${space.id}`, el: h_flex().h(6).flex_none().rounded_b(7).bg(t.raised) });
+          for (const [j, tab] of (space.tabs ?? []).entries()) {
+            rows.push({ key: tab.id, el: this.tabRow(space, tab, t, narrow, j === space.tabs.length - 1) });
           }
         }
         // A space's rows stay together; the gap goes before the next space.
