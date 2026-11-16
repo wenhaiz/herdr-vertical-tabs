@@ -56,7 +56,10 @@ export default class Pane extends View {
     const t = theme();
     const p = this.me();
     if (!p) return div();
-    const name = ((p.program?.agent || p.program?.shell) && p.program.name) || p.title || p.program?.name || "shell";
+    // Codex titles a terminal "conversation | folder | status"; the
+    // conversation is the part worth showing.
+    const title = p.app === "codex" ? (p.title ?? "").split(" | ")[0] : p.title;
+    const name = ((p.program?.agent || p.program?.shell) && p.program.name) || title || p.program?.name || "shell";
     // The tab carries the task name; its auto-title often leads with the index.
     const tab = spaces().flatMap((s) => s.tabs ?? []).find((t) => t.id === p.tab);
     const task = (tab?.name ?? "").replace(/^\d+\s*·\s*/, "");

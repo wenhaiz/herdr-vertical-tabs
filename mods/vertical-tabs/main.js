@@ -8,6 +8,10 @@ import { spaces, panes, machines, theme, run, openOverlay, hc, shared, setShared
 
 const OPEN = "vertical-tabs.open";
 const CLOSED = "vertical-tabs.machines";
+const NAMES = "vertical-tabs.names";
+// oh-my-zsh titles a shell after the command while it runs, then after the
+// folder (%~) at the prompt; a folder is not worth a tab's name.
+const IDLE_TITLE = /^(?:~|\/|[^\s@]+@[^\s:]+:)/;
 // Below this the sidebar is a rail: icons only, names in tooltips.
 const NARROW = 170;
 // Avatar colors shared with the shipped spaces mod, one strong color per hue.
@@ -25,8 +29,43 @@ export default class SpaceTree extends View {
     this.hoveredMachine = null;
     this.hoveredTab = null;
     this.machines = []; // hc machine ls: name, state, ...
+    this.autoNames = JSON.parse(localStorage.getItem(NAMES) ?? "{}");
     this.refreshMachines(cx);
     cx.timer.every(15000, (cx) => this.refreshMachines(cx));
+    cx.timer.every(1000, () => this.followTitles());
+  }
+
+  // A tab is named after what its terminal is doing: an agent's own title
+  // (Claude Code puts its conversation name there) or the command a shell is
+  // running. Names someone set by hand are left alone.
+  followTitles() {
+    const ps = panes();
+    let changed = false;
+    for (const space of spaces()) {
+      if (space.machine) continue;
+      for (const tab of space.tabs ?? []) {
+        const pane = ps.find((p) => p.tab === tab.id && p.focused)
+          ?? ps.find((p) => p.tab === tab.id && p.program?.agent)
+          ?? ps.find((p) => p.tab === tab.id);
+        const title = pane?.title?.trim();
+        if (!title) continue;
+        // Codex titles a terminal "conversation | folder | status"; the
+        // conversation is the part worth a tab's name.
+        const shown = pane.app === "codex" ? title.split(" | ")[0] : title;
+        const idle = !pane.program?.agent && IDLE_TITLE.test(title);
+        // Follow the default names and this mod's own; a hand-set name stays.
+        const last = this.autoNames[tab.id];
+        const follows = last !== undefined
+          ? last === tab.name
+          : /^(?:tb)?\d+(?: · .*)?$/.test(tab.name);
+        const name = idle ? pane.program?.name ?? "shell" : shown;
+        if (!follows || tab.name === name) continue;
+        this.autoNames[tab.id] = name;
+        changed = true;
+        run("tab.rename", { id: tab.id, name: name });
+      }
+    }
+    if (changed) localStorage.setItem(NAMES, JSON.stringify(this.autoNames));
   }
 
   persist() {

@@ -7,6 +7,7 @@ A [Herdr](https://herdr.dev) layout that replaces the horizontal tab bar with a 
 ## What it changes
 
 - Machines, spaces and tabs form one tree in the left sidebar. Click a space to select it and expand its tabs; click the active space again to collapse it.
+- Each tab is named after what its terminal is doing: an agent's own conversation title (Claude Code and Codex write it into the terminal title; Codex's `conversation | folder | status` keeps only the conversation), or the command a shell is running. An idle shell shows its program name (like `zsh`), and a name you set with F2 is left alone.
 - The horizontal tab bar is gone. Only the shown space and its current tab are highlighted.
 - Files and Changes toggle from the bottom-right status bar and are remembered per space.
 - The Changes panel stacks every changed file as a collapsible diff card; cards start folded, and the summary cluster at the right of the header (file count, totals, expand/collapse-all icon) toggles them all. The filter sits in the header row; the commit bar stays at the bottom. A file's header stays pinned at the top of the list while its diff scrolls under it, and the next file's header pushes it off; folded cards just scroll.
