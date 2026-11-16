@@ -9,8 +9,8 @@ A Herdr layout that turns the left sidebar into a directory tree: machines, then
 - **Top left:** the Herdr logo and name, then three icon buttons at the right: search, settings (gear), and collapse sidebar.
 - **Sidebar tree**, top to bottom:
   - machine rows: a disclosure chevron, a monitor icon for this computer or a server icon for a remote machine, a bold machine name, the connection state when it is not connected (for example `unreachable`), a `+` for a new space there, and a 6px connection dot (green connected, gray not).
-  - space rows: a chevron, an 18px rounded square in a stable color with the space name's first letter, the name, and a 6px agent-status mark. The shown space and all of its tab rows share one light `raised` card: the space row rounds the card's top corners, a 6px cap below the last tab rounds its bottom, and a collapsed active space is a single rounded row.
-  - tab rows: the program icon, the tab name (or a terminal icon and name when it has no program), the agent-status mark, and a close × on the current tab or on any tab while hovering it. The current tab gets a nested `selected` pill inset inside the card, and hovering any other tab draws the same inset pill in the hover color. Tab rows are 34px tall, space rows 32px, machine rows 26px; space groups leave an 8px gap and machine groups 12px.
+  - space rows: a chevron, an 18px rounded square in a stable color with the space name's first letter, the name, and a 6px agent-status mark. Every space row and its tab rows share one flat hover fill as a single block: the space row rounds the block's top corners, a 6px cap below the last tab rounds its bottom, and a collapsed space is a single rounded row. The shown space is marked by its brighter name, not by a card fill.
+  - tab rows: the program icon, the tab name (or a terminal icon and name when it has no program), the agent-status mark, and a close × on the current tab or on any tab while hovering it. The current tab gets a brighter nested pill inset inside the block, and hovering any other tab draws the same inset pill. Tab rows are 34px tall, space rows 32px, machine rows 26px; space groups leave an 8px gap and machine groups 12px.
   - an expanded space has a single `+` at the right of its row that starts a new tab; it only appears while the space is expanded.
 - **Agents section** under the tree: a header row with the title, a sort button (clock/layers), and a double-chevron button at the far right. Expanded, it lists agents grouped by priority or space; in the priority and pinned lists each row puts the space name and its time on the first line and the tab title, dim and smaller, on a second line (40px tall; 30px when there is no second line). Collapsed, the header is 28px tall and shows a summary such as `Working 2` or `Needs you 1 Done 2`.
 - **Main area:** one terminal card (or the active tab's split panes) with a 30px pane header: program icon, agent or program name, the tab's task name as a dim subtitle, blocked/done status, and split-right / split-down / zoom / close buttons on hover. There is no working spinner in the header; the tree and Agents list show progress.
@@ -24,7 +24,7 @@ A Herdr layout that turns the left sidebar into a directory tree: machines, then
 - Click a machine row to fold or unfold its spaces. The local machine is shown first; remote machines are sorted by name.
 - Click a space: if it is not the shown space, select it and expand its tabs; if it is already shown, collapse or expand it. Clicking its chevron only toggles. Several spaces can stay expanded.
 - Click a tab to select its space and show it. Double-click a tab to rename it. Right-click a space or tab opens the shipped context menu.
-- Only the shown space (with all of its tab rows, as one raised card) and its current tab (a nested `selected` pill) are highlighted; other spaces' remembered tabs stay as plain list rows.
+- Only the current tab (a brighter nested pill) is highlighted; every space and its remembered tabs stay as plain list rows, and the shown space is marked by its brighter name.
 - Status marks: a pulsing hourglass means working; a 6px dot is blocked/done in the corresponding theme color; idle shows no mark. A space shows its most urgent agent status; when the space is expanded its working mark is hidden (its tab rows show the loading), while blocked/done marks stay.
 - The `+` on a machine row appears only while hovering that row or when that machine holds the shown space. The `+` on a space row appears only while that space is expanded and is hidden in the 44px rail.
 - Open spaces, folded machines, and folded machine groups persist per window in localStorage.
@@ -44,7 +44,7 @@ A Herdr layout that turns the left sidebar into a directory tree: machines, then
   - block `agents`, weight 1, min 28, mod `agents-fold`.
 - column `work`:
   - row `work-body`, padding 8, gap 8:
-    - block `main`, `{ "tab": "active" }`, pane frame with `header` mod `pane-cwdless` (30px, top, reveal always), radius 10, gap 8, lone, background/border/focus.
+    - block `main`, `{ "tab": "active" }`, pane frame with `header` mod `pane-cwdless` (30px, top, reveal always), radius 10, gap 8, lone, background/border (no focus ring).
     - column `panel`, hidden, 368px, min 280, max 900 → stack `panel-body` (`active: "files"`) with blocks `files` and `vertical-changes`.
   - row `bottom`, 28px: block `status` (weight 1, mod `status-cwd`) and block `panel-toggles` (170px).
 - Root: `titlebar: "none"`, `traffic_lights: [12, 16]`, `background: "canvas"`, `terminal_padding: [14, 12]`, `preview: "layouts/vertical-tabs.svg"`.

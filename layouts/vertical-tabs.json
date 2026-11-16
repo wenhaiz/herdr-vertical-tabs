@@ -77,10 +77,6 @@
                     "width": 1,
                     "color": "border"
                   },
-                  "focus": {
-                    "width": 1,
-                    "color": "accent"
-                  },
                   "radius": 10,
                   "gap": 8,
                   "lone": true

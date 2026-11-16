@@ -17,13 +17,6 @@ const NARROW = 170;
 // Avatar colors shared with the shipped spaces mod, one strong color per hue.
 const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
 const PALETTE = ["ansi6", "ansi3", "ansi4", "ansi5", "ansi2", "ansi1"];
-// A fill lighter than hover: half its alpha when it carries one, otherwise
-// half-opacity over the sidebar.
-const faint = (color) => {
-  const hex = color.slice(1);
-  const a = hex.length === 8 ? Math.round(parseInt(hex.slice(6), 16) / 2) : 128;
-  return `#${hex.slice(0, 6)}${a.toString(16).padStart(2, "0")}`;
-};
 
 export default class SpaceTree extends View {
   init(_props, cx) {
@@ -179,7 +172,7 @@ export default class SpaceTree extends View {
     // the shown space, or while the pointer is on its row.
     const showNew = current || this.hoveredMachine === key;
     return h_flex().id(`machine-${key}`)
-      .h(26).flex_none().px(6).gap(5).rounded(6).items_center().text_size(12.5).text_color(t.dim)
+      .h(26).flex_none().pl(6).pr(7).gap(5).rounded(6).items_center().text_size(12.5).text_color(t.dim)
       .hover((s) => s.bg(t.hover))
       .when(Boolean(login), (el) => el.tooltip(login))
       .on_hover((hovered, cx) => {
@@ -202,7 +195,7 @@ export default class SpaceTree extends View {
         .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .on_click((_e, cx) => { cx.stop_propagation(); if (showNew) run("space.new", { machine: m ?? "" }); })
         .child(svg("mods/workspace-chrome/plus.svg").size(11)))
-      .child(dot);
+      .child(div().size(20).flex_none().flex().items_center().justify_center().child(dot));
   }
 
   spaceRow(space, t, narrow) {
@@ -221,8 +214,7 @@ export default class SpaceTree extends View {
     if (narrow) {
       return h_flex().id(`space-${space.id}`).h(32).flex_none().px(6).gap(3).rounded(7).items_center()
         .tooltip(`${space.name}${open ? " · open" : ""}`)
-        .when(space.active, (el) => el.bg(t.selected))
-        .when(!space.active, (el) => el.bg(faint(t.hover)))
+        .bg(t.hover)
         .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.spaceMenu(space); })
         .on_click(click)
         .child(this.railSlot(this.avatar(space, t)))
@@ -233,8 +225,7 @@ export default class SpaceTree extends View {
       // An expanded space is one card: its rows below share the fill, so only
       // the top corners are rounded.
       .when(open, (el) => el.rounded_b(0))
-      .when(space.active, (el) => el.bg(t.selected))
-      .when(!space.active, (el) => el.bg(faint(t.hover)))
+      .bg(t.hover)
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.spaceMenu(space); })
       .on_click(click)
       .child(
@@ -254,7 +245,8 @@ export default class SpaceTree extends View {
           .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .on_click((_e, cx) => { cx.stop_propagation(); run("tab.new", { space: space.id }); })
           .child(svg("mods/workspace-chrome/plus.svg").size(11))))
-      .when(Boolean(status), (el) => el.child(status));
+      .when(Boolean(status), (el) => el.child(
+        div().size(20).flex_none().flex().items_center().justify_center().child(status)));
   }
 
   tabRow(space, tab, t, narrow, last) {
@@ -280,10 +272,9 @@ export default class SpaceTree extends View {
         .child(this.railSlot(this.programIcon(program, t)))
         .child(this.railSlot(status, 11));
     }
-    // Every tab of the shown space sits inside one raised card opened by the
-    // space row; the current tab gets a nested selected pill inside it.
-    const card = space.active;
-    const fill = card ? t.selected : faint(t.hover);
+    // One flat fill for the whole tree: a space and its tabs are one block, and
+    // only the current tab's inset pill lifts out of it.
+    const fill = t.hover;
     const pill = t.hover;
     const pillBottom = last ? 6 : 2;
     return h_flex().id(`tab-${tab.id}`)
