@@ -287,7 +287,7 @@ export default class SpaceTree extends View {
     const pill = t.hover;
     const pillBottom = last ? 6 : 2;
     return h_flex().id(`tab-${tab.id}`)
-      .h(34).flex_none().pl(26).pr(6).gap(6).relative().items_center()
+      .h(34).flex_none().pl(26).pr(7).gap(6).relative().items_center()
       .bg(fill)
       .when(last, (el) => el.h(38).pb(4).rounded_b(7))
       .when(tab.settled, (el) => el.opacity(0.55))
@@ -311,10 +311,11 @@ export default class SpaceTree extends View {
       .child(this.programIcon(program, t))
       .child(div().flex_1().min_w(0).truncate().text_size(12.5)
         .text_color(current ? t.foreground : t.muted).child(tab.zoomed ? `${name} Z` : name))
-      .when(Boolean(status), (el) => el.child(status))
+      .when(Boolean(status), (el) => el.child(
+        div().size(20).flex_none().flex().items_center().justify_center().child(status)))
       // The current tab always offers close; any other tab shows it on hover.
       .when(current || this.hoveredTab === tab.id, (el) => el.child(
-        div().id(`close-${tab.id}`).size(16).flex_none().flex().items_center().justify_center().rounded(4).text_color(t.dim)
+        div().id(`close-${tab.id}`).size(20).flex_none().flex().items_center().justify_center().rounded(4).text_color(t.dim)
           .hover((s) => s.bg(t.hover).text_color(t.foreground))
           .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .on_click((_e, cx) => { cx.stop_propagation(); run("tab.close", { id: tab.id }); })
