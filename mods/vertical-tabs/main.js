@@ -12,6 +12,9 @@ const NAMES = "vertical-tabs.names";
 // oh-my-zsh titles a shell after the command while it runs, then after the
 // folder (%~) at the prompt; a folder is not worth a tab's name.
 const IDLE_TITLE = /^(?:~|\/|[^\s@]+@[^\s:]+:)/;
+// The names Herdr gives tabs itself: "19", "tb19", and on a remote machine
+// "<machine>/t19" (a shell that set no title keeps that pane id instead).
+const AUTO_NAME = /^(?:[^\s/]+\/)?(?:(?:t|tb)[0-9a-f]+|\d+)(?: · .*)?$/;
 // Below this the sidebar is a rail: icons only, names in tooltips.
 const NARROW = 170;
 // Avatar colors shared with the shipped spaces mod, one strong color per hue.
@@ -42,7 +45,6 @@ export default class SpaceTree extends View {
     const ps = panes();
     let changed = false;
     for (const space of spaces()) {
-      if (space.machine) continue;
       for (const tab of space.tabs ?? []) {
         const pane = ps.find((p) => p.tab === tab.id && p.focused)
           ?? ps.find((p) => p.tab === tab.id && p.program?.agent)
@@ -52,12 +54,13 @@ export default class SpaceTree extends View {
         // Codex titles a terminal "conversation | folder | status"; the
         // conversation is the part worth a tab's name.
         const shown = pane.app === "codex" ? title.split(" | ")[0] : title;
-        const idle = !pane.program?.agent && IDLE_TITLE.test(title);
+        // A pane still titled with its own id is a shell that set no title.
+        const idle = !pane.program?.agent && (IDLE_TITLE.test(title) || AUTO_NAME.test(title));
         // Follow the default names and this mod's own; a hand-set name stays.
         const last = this.autoNames[tab.id];
         const follows = last !== undefined
           ? last === tab.name
-          : /^(?:tb)?\d+(?: · .*)?$/.test(tab.name);
+          : AUTO_NAME.test(tab.name);
         const name = idle ? pane.program?.name ?? "shell" : shown;
         if (!follows || tab.name === name) continue;
         this.autoNames[tab.id] = name;
